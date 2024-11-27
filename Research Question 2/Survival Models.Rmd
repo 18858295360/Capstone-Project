@@ -1,0 +1,592 @@
+---
+title: "Survival Model Analysis"
+author: "Liyang Li"
+date: "2024-11-13"
+output: 
+  html_document:
+    toc: true          # Add a table of contents
+    toc_depth: 2       # Set the depth of the table of contents
+    toc_float: true    # Make the table of contents float
+    theme: united      # Set the theme style for the HTML document
+    highlight: tango   # Set the code highlighting style
+    css: styles.css    # Optional: Custom CSS file to adjust fonts and styles
+    code_folding: hide 
+fontsize: 12pt         # Set the default font size of the document
+geometry: margin=1in   # Set page margins
+---
+
+# Introduction
+
+In this analysis, we explore survival models for ICU patients, using Kaplan-Meier survival curves and Cox regression models. The analysis is based on ICU patient data from the MIMIC database, aiming to understand the effect of weekend admissions on long-term mortality.
+
+# Libraries and Setup
+
+First, we load all necessary libraries and prepare for data preprocessing. These libraries are used for data loading, handling, statistical analysis, and generating visualizations.
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, collapse = TRUE, fig.align = 'center', warning = FALSE, message = FALSE)
+```
+
+```{r, echo=FALSE, results='hide', message=FALSE, warning=FALSE}
+
+# Load necessary libraries
+
+library(knitr)
+library(kableExtra)
+
+library(survival)
+library(MASS)
+# Install necessary packages if not already installed
+if (!requireNamespace("dplyr", quietly = TRUE)) install.packages("dplyr")
+if (!requireNamespace("tidyr", quietly = TRUE)) install.packages("tidyr")
+
+# Load packages
+library(dplyr)
+library(tidyr)
+
+if (!requireNamespace("nortest", quietly = TRUE)) install.packages("nortest")
+library(nortest)
+
+# Load necessary libraries
+library(survival)
+library(survminer)
+
+```
+
+# Load and Explore the Data
+In this section, we load the cleaned dataset and perform an initial exploratory analysis to ensure that the data is appropriate for further modeling.
+
+## Load the Data
+We begin by loading the cleaned dataset from the specified directory.
+
+```{r}
+# Set working directory to where 'cleaned_final_cox_dataset.csv' is located
+setwd("D:/LLY/Capstone")
+
+# Load dataset
+data <- read.csv("cleaned_final_cox_dataset.csv")
+```
+
+## Explore the Data
+To ensure that the dataset is appropriate for further modeling, we examine its structure.
+
+```{r}
+# Ensure the dataset's structure is correct for a Cox model
+str(data)
+```
+
+## Converting Categorical Variables to Factors
+To prepare the dataset for Cox regression, we convert character-based categorical variables into factors. This ensures that the Cox model can correctly interpret these categorical variables.
+
+```{r}
+# Convert character-based categorical variables to factors
+data$insurance_Medicare <- as.factor(data$insurance_Medicare)
+data$admission_location_EMERGENCY.ROOM.ADMIT <- as.factor(data$admission_location_EMERGENCY.ROOM.ADMIT)
+data$admission_location_PHYS.REFERRAL.NORMAL.DELI <- as.factor(data$admission_location_PHYS.REFERRAL.NORMAL.DELI)
+data$admission_location_CLINIC.REFERRAL.PREMATURE <- as.factor(data$admission_location_CLINIC.REFERRAL.PREMATURE)
+data$admission_location_TRANSFER.FROM.HOSP.EXTRAM <- as.factor(data$admission_location_TRANSFER.FROM.HOSP.EXTRAM)
+data$admission_type_URGENT <- as.factor(data$admission_type_URGENT)
+data$is_weekend_admission <- as.factor(data$is_weekend_admission)
+
+```
+
+# Kaplan-Meier Survival Analysis
+In this section, we conduct Kaplan-Meier survival analysis for each categorical variable in the dataset. This will help us understand the survival probability differences between groups.
+
+```{r}
+
+
+# List of categorical variables
+categorical_vars <- c(
+  "insurance_Medicare", 
+  "admission_location_EMERGENCY.ROOM.ADMIT",
+  "admission_location_PHYS.REFERRAL.NORMAL.DELI",
+  "admission_location_CLINIC.REFERRAL.PREMATURE",
+  "admission_location_TRANSFER.FROM.HOSP.EXTRAM",
+  "admission_type_URGENT",
+  "is_weekend_admission"
+)
+
+# Kaplan-Meier survival curves for each categorical variable
+for (variable_name in categorical_vars) {
+  # Ensure the variable is a factor
+  data[[variable_name]] <- as.factor(data[[variable_name]])
+  
+  # Fit a Kaplan-Meier survival curve
+  km_fit <- survfit(as.formula(paste("Surv(los_x, expire_flag) ~", variable_name)), data = data)
+  
+  # Plot the survival curve without risk table
+  plot <- ggsurvplot(
+    km_fit,
+    data = data,
+    risk.table = FALSE,            # Disable risk table
+    pval = TRUE,                   # Show p-value from log-rank test
+    conf.int = TRUE,               # Show confidence intervals
+    legend.title = variable_name,  # Use variable name as legend title
+    legend.labs = levels(data[[variable_name]]), # Use levels of the variable as legend labels
+    xlab = "Time (days)",          # Label for x-axis
+    ylab = "Survival Probability", # Label for y-axis
+    title = paste("Kaplan-Meier Survival Curve by", variable_name)
+  )
+  
+  # Print the plot to ensure rendering
+  print(plot)
+}
+
+
+
+```
+# Kaplan-Meier Survival Analysis: Interpretation
+The Kaplan-Meier survival curves indicate statistically significant differences in survival probabilities across various groups (p < 0.05 for all comparisons). 
+
+## Key Observations
+- **Medicare Insurance**: Patients with Medicare insurance demonstrate higher survival probabilities, suggesting a protective effect potentially linked to better access to care.
+- **Emergency Room Admission**: Admission through the emergency room is associated with improved survival, likely due to faster or more structured medical interventions.
+- **Physician Referral**: Admissions facilitated by physician referrals are linked to better survival outcomes, which may reflect more planned or timely medical care.
+- **Transfers from Other Hospitals**: Patients transferred from other hospitals also show higher survival rates, possibly reflecting improved resource allocation or enhanced care.
+- **Urgent Admissions**: While urgent admissions exhibit a smaller survival advantage compared to other groups, the difference remains statistically significant.
+
+### Conclusion
+These findings highlight the importance of insurance status, admission methods, and referral pathways in influencing patient survival. These initial results warrant further validation through multivariate Cox regression analysis to account for potential confounding factors and to establish independent predictors of survival.
+
+### Explanation:
+- `# Kaplan-Meier Survival Analysis: Interpretation` is a level 1 heading that introduces the interpretation of the Kaplan-Meier survival curves.
+- `## Key Observations` is a level 2 heading that highlights key findings.
+- `### Conclusion` is another level 2 heading summarizing the section's key insights.
+
+This structured format ensures that each part of the analysis is clearly presented and easy to navigate, with appropriate emphasis on the main observations and their interpretations.
+
+
+# Univariate Cox Regression Analysis
+
+In this section, we perform univariate Cox regression analysis for each variable in the dataset to determine their association with survival. The analysis allows us to identify potentially significant predictors of patient mortality that will be further validated in multivariate models.
+
+
+
+```{r}
+# Get all column names from the dataset
+all_columns <- colnames(data)
+
+# Initialize a list to store Cox regression results
+cox_results <- list()
+
+# Perform univariate Cox regression on all variables
+for (var in all_columns) {
+  # Skip time variable and target variable
+  if (var %in% c("los_x", "expire_flag")) next
+  
+  # Create the Cox regression formula
+  formula <- as.formula(paste("Surv(los_x, expire_flag) ~", var))
+  
+  # Attempt to run the Cox regression
+  tryCatch({
+    cox_model <- coxph(formula, data = data)
+    cox_summary <- summary(cox_model)
+    
+    # Extract results and store them
+    cox_results[[var]] <- data.frame(
+      Variable = var,
+      HR = exp(cox_summary$coefficients[, "coef"]),  # Hazard ratio
+      CI_lower = exp(cox_summary$conf.int[, "lower .95"]),  # Lower confidence interval (95%)
+      CI_upper = exp(cox_summary$conf.int[, "upper .95"]),  # Upper confidence interval (95%)
+      P_value = cox_summary$coefficients[, "Pr(>|z|)"]  # P-value
+    )
+  }, error = function(e) {
+    message(paste("Error processing", var, ":", e$message))
+  })
+}
+
+# Combine all results into a single data frame
+cox_results_df <- do.call(rbind, cox_results)
+
+# Print all Cox regression results
+print("Cox Regression Results:")
+print(cox_results_df)
+
+# Filter significant variables (P-value < 0.05)
+significant_vars <- cox_results_df[cox_results_df$P_value < 0.05, ]
+
+# Print significant variables
+print("Significant Variables (P < 0.05):")
+print(significant_vars)
+
+
+
+```
+## Key Findings from Univariate Cox Regression
+
+- **Identification of Significant Predictors**: Variables with p-values less than 0.05 were identified as significant predictors of survival. These variables are highlighted in the output as candidates for further modeling.
+- **Hazard Ratio Interpretation**: The hazard ratio (HR) indicates the relative risk of death associated with a one-unit increase in the predictor variable.
+- **Filtering Step**: Only variables with p-values less than 0.05 were considered for further analysis, reducing the number of predictors and focusing on the most impactful variables.
+
+
+
+
+```{r}
+unadjusted_model <- coxph(Surv(los_x, expire_flag) ~ is_weekend_admission , data = data)
+summary(unadjusted_model)
+```
+### Interpretation of Unadjusted Cox Model
+
+- **Hazard Ratio (HR)**: HR for weekend admission is 0.9858, suggesting no significant difference in mortality risk between weekend and weekday admissions.
+- **P-Value**: p-value is 0.572, indicating the result is not statistically significant.
+- **Confidence Interval (CI)**: 95% CI of HR (0.938, 1.036) includes 1, supporting the lack of significant effect.
+
+**Conclusion**: Weekend admissions do not significantly impact patient survival based on this unadjusted model.
+
+
+```{r}
+# Re-fit the Cox model, forcing the inclusion of is_weekend_admission
+cox_model <- coxph(Surv(los_x, expire_flag) ~ is_weekend_admission + ., data = data)
+
+# Run stepwise selection with is_weekend_admission forced to remain
+library(MASS)
+stepwise_model <- stepAIC(cox_model, scope = list(lower = ~ is_weekend_admission, upper = ~ is_weekend_admission + .), direction = "both", trace = 0)
+
+# Summarize the final model
+summary(stepwise_model)
+
+```
+
+### Stepwise Cox Regression Model
+
+- **Objective**: To refine the Cox regression model by keeping only significant predictors, while forcing the inclusion of `is_weekend_admission`.
+- **Key Findings**:
+  - **Significant Predictors**: Variables like `positiveculture`, `gcs`, and `age_years` were found to be highly significant (p < 0.05).
+  - **is_weekend_admission**: The hazard ratio (HR) was 0.969, indicating no statistically significant effect on mortality (p = 0.216).
+  - **Model Fit**: The concordance index (C = 0.67) suggests a moderate predictive ability of the final model.
+- **Conclusion**: The `Reduced Model` retains key clinical predictors, offering a balanced and interpretable model for further use.
+
+
+
+```{r}
+# Get the coefficient summary of the stepwise_model
+stepwise_summary <- summary(stepwise_model)
+
+# Extract p-values
+stepwise_p_values <- stepwise_summary$coefficients[, "Pr(>|z|)"]
+
+# Filter significant variables (p < 0.05)
+significant_vars <- names(stepwise_p_values[stepwise_p_values < 0.05])
+
+# Print significant variables
+print("Significant variables from stepwise_model:")
+print(significant_vars)
+
+```
+### Identification of Significant Variables
+
+- **Objective**: To identify significant variables from the `stepwise_model` for further interpretation and analysis.
+- **Significant Variables**:
+  - The following variables were found to be significant predictors of survival (p < 0.05):
+    - `positiveculture`
+    - `gcs`
+    - `gcsmotor`
+    - `lactate`
+    - `bloodureanitrogen`
+    - `intnormalisedratio`
+    - `chloride`
+    - `hematocrit`
+    - `age_years`
+    - `insurance_MedicareTrue`
+    - `gcsverbal`
+    - `admission_location_PHYS.REFERRAL.NORMAL.DELITrue`
+    - `admission_location_CLINIC.REFERRAL.PREMATURETrue`
+    - `admission_location_TRANSFER.FROM.HOSP.EXTRAMTrue`
+- **Conclusion**: These significant predictors will be the focus for further modeling to understand their influence on patient survival.
+
+
+
+```{r}
+# Remove "True" from variable names
+significant_vars_cleaned <- gsub("True", "", significant_vars)
+
+# Ensure the inclusion of 'is_weekend_admission' variable
+significant_vars_cleaned <- union(significant_vars_cleaned, "is_weekend_admission")
+
+# Construct a new formula
+significant_formula <- as.formula(
+  paste("Surv(los_x, expire_flag) ~", paste(significant_vars_cleaned, collapse = " + "))
+)
+
+# Fit a Cox model using the cleaned variables
+reduced_model <- coxph(significant_formula, data = data)
+
+# Output the summary of the Reduced Model
+summary(reduced_model)
+
+
+```
+### Reduced Cox Model Summary
+
+- **Objective**: This reduced model includes only the significant variables identified from previous analyses, along with the core variable `is_weekend_admission`, to strike a balance between model complexity and performance.
+- **Outcome**:
+  - Variables like `positiveculture`, `gcs`, `gcsmotor`, and `lactate` show significant influence on survival with p-values < 0.05.
+  - The **hazard ratio (HR)** for each significant variable indicates the effect size on survival. For instance:
+    - `positiveculture` has an HR of 1.058, implying an increased risk of death with positive culture status.
+    - `is_weekend_admission` does not significantly affect survival (p > 0.05), indicating no strong evidence for weekend admission affecting long-term mortality.
+  - The **Concordance index** of 0.669 suggests a moderate ability of the model to differentiate between patient survival times.
+
+- **Conclusion**: This reduced model includes the most impactful predictors, ensuring interpretability while avoiding unnecessary complexity. Further steps might include validation on separate datasets to confirm model reliability.
+
+```{r}
+# Assign the stepwise_model as the full model
+full_model <- stepwise_model
+
+# Compare the reduced model with the full model using Likelihood Ratio Test (LRT)
+lrt_full_vs_reduced <- anova(full_model, reduced_model, test = "LRT")
+
+# Compare the unadjusted model with the full model using LRT
+lrt_unadjusted_vs_full <- anova(unadjusted_model, full_model, test = "LRT")
+
+# Compare the unadjusted model with the reduced model using LRT
+lrt_unadjusted_vs_reduced <- anova(unadjusted_model, reduced_model, test = "LRT")
+
+# Print the results
+print("Likelihood Ratio Test (Full Model vs Reduced Model):")
+print(lrt_full_vs_reduced)
+
+print("Likelihood Ratio Test (Unadjusted Model vs Full Model):")
+print(lrt_unadjusted_vs_full)
+
+print("Likelihood Ratio Test (Unadjusted Model vs Reduced Model):")
+print(lrt_unadjusted_vs_reduced)
+
+
+
+```
+### Likelihood Ratio Test Comparisons
+
+- **Full Model vs Reduced Model**:
+  - The likelihood ratio test (LRT) between the full and reduced models resulted in a chi-square value of 5.117 with 2 degrees of freedom, and a p-value of 0.077. This suggests that the additional variables in the full model do not provide a significant improvement in model fit compared to the reduced model.
+
+- **Unadjusted Model vs Full Model**:
+  - The comparison between the unadjusted model and the full model shows a significant improvement in fit (chi-square = 2462.4, p < 2.2e-16). This indicates that the additional covariates significantly enhance the model's performance.
+
+- **Unadjusted Model vs Reduced Model**:
+  - Similar to the full model comparison, the reduced model also demonstrates a significant improvement over the unadjusted model (chi-square = 2457.3, p < 2.2e-16). This emphasizes the importance of including the selected covariates to improve model performance.
+
+- **Conclusion**: The reduced model provides a balanced fit with sufficient explanatory power, maintaining interpretability while avoiding overfitting.
+
+
+```{r}
+# Compare Full Model vs Reduced Model using ANOVA
+anova_full_vs_reduced <- anova(full_model, reduced_model, test = "LRT")
+
+# Compare Full Model vs Unadjusted Model using ANOVA
+anova_full_vs_unadjusted <- anova(full_model, unadjusted_model, test = "LRT")
+
+# Compare Reduced Model vs Unadjusted Model using ANOVA
+anova_reduced_vs_unadjusted <- anova(reduced_model, unadjusted_model, test = "LRT")
+
+# Print the results
+print("ANOVA: Full Model vs Reduced Model")
+print(anova_full_vs_reduced)
+
+print("ANOVA: Full Model vs Unadjusted Model")
+print(anova_full_vs_unadjusted)
+
+print("ANOVA: Reduced Model vs Unadjusted Model")
+print(anova_reduced_vs_unadjusted)
+
+```
+### ANOVA Model Comparisons
+
+- **Full Model vs Reduced Model**:
+  - The analysis of variance (ANOVA) comparison between the full and reduced models resulted in a chi-square value of 5.117 with 2 degrees of freedom, and a p-value of 0.077. This indicates that the reduced model does not significantly differ from the full model, suggesting that the additional predictors in the full model may not substantially improve the model fit.
+
+- **Full Model vs Unadjusted Model**:
+  - Comparing the full model to the unadjusted model, there was a significant difference in model fit (chi-square = 2462.4, p < 2.2e-16). This emphasizes the importance of including additional covariates to improve predictive accuracy.
+
+- **Reduced Model vs Unadjusted Model**:
+  - The reduced model also shows a significant improvement in model fit over the unadjusted model (chi-square = 2457.3, p < 2.2e-16), supporting the effectiveness of the reduced set of covariates for enhancing model quality.
+
+- **Conclusion**: Both the full and reduced models are significantly better than the unadjusted model, indicating that adding selected covariates improves the model's predictive power.
+
+
+
+```{r}
+# Calculate AIC and BIC for each model
+
+# AIC and BIC for Full Model
+aic_full <- AIC(full_model)
+bic_full <- BIC(full_model)
+
+# AIC and BIC for Reduced Model
+aic_reduced <- AIC(reduced_model)
+bic_reduced <- BIC(reduced_model)
+
+# AIC and BIC for Unadjusted Model
+aic_unadjusted <- AIC(unadjusted_model)
+bic_unadjusted <- BIC(unadjusted_model)
+
+# Print the results
+print("AIC and BIC for Full Model:")
+print(paste("AIC:", aic_full))
+print(paste("BIC:", bic_full))
+
+print("AIC and BIC for Reduced Model:")
+print(paste("AIC:", aic_reduced))
+print(paste("BIC:", bic_reduced))
+
+print("AIC and BIC for Unadjusted Model:")
+print(paste("AIC:", aic_unadjusted))
+print(paste("BIC:", bic_unadjusted))
+
+```
+
+Model1: `Surv(los_x, expire_flag) ~ is_weekend_admission`
+
+Model2: `Surv(los_x, expire_flag) ~ is_weekend_admission + positiveculture + gcs + gcsmotor + lactate + bloodureanitrogen + hemoglobin + intnormalisedratio + chloride + hematocrit + age_years + insurance_Medicare + gcsverbal + admission_location_EMERGENCY.ROOM.ADMIT + admission_location_PHYS.REFERRAL.NORMAL.DELI + admission_location_CLINIC.REFERRAL.PREMATURE + admission_location_TRANSFER.FROM.HOSP.EXTRAM`
+
+Model3: `Surv(los_x, expire_flag) ~ positiveculture + gcs + gcsmotor + lactate + bloodureanitrogen + intnormalisedratio + chloride + hematocrit + age_years + insurance_Medicare + gcsverbal + admission_location_PHYS.REFERRAL.NORMAL.DELI + admission_location_CLINIC.REFERRAL.PREMATURE + admission_location_TRANSFER.FROM.HOSP.EXTRAM`
+
+
+**Model Descriptions:**
+
+- **Model1 (Baseline Model):**  
+  This univariate model includes only `is_weekend_admission` to assess the effect of weekend admissions on survival time. It serves as a baseline but lacks the ability to fully explain survival variability without other covariates.
+
+- **Model2:**  
+  Extends Model1 by incorporating additional clinical and demographic variables (e.g., `positiveculture`, `gcs`, `age_years`). This addition improves the model's fit and its ability to explain survival outcomes.
+
+- **Model3 (Reduced Model):**  
+  Retains only significant variables from Model2, reducing model complexity while preserving explanatory power. This enhances interpretability and reduces the risk of overfitting.
+
+**Model Analysis:**
+
+- **Univariate Effects (Model1):**  
+  - Only `is_weekend_admission` is considered.
+  - Limited fit suggests that a single variable cannot sufficiently explain survival outcomes.
+
+- **Adjusted Effects (Model2):**  
+  - Improved fit by including key clinical and demographic variables.
+  - Highlights significant predictors such as `gcs`, `age_years`, and `bloodureanitrogen`.
+
+- **Model Simplification (Model3):**  
+  - Excludes non-significant variables, improving interpretability.
+  - Maintains focus on the most impactful predictors.
+
+
+```{r}
+
+# 创建模型对比数据框
+model_comparison <- data.frame(
+  Term = c(
+    "Intercept",
+    "is_weekend_admission",
+    "positiveculture",
+    "gcs",
+    "gcsmotor",
+    "lactate",
+    "bloodureanitrogen",
+    "hemoglobin",
+    "intnormalisedratio",
+    "chloride",
+    "hematocrit",
+    "age_years",
+    "insurance_Medicare",
+    "AIC",
+    "BIC"
+  ),
+  Model1 = c(
+    "0.9858*** (0.938, 1.036)", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", 
+    "140726", "140733"
+  ),
+  Model2 = c(
+    "0.9691 (0.9219, 1.0188)", "0.9691*** (0.9219, 1.0188)", "1.0583* (1.0029, 1.1168)", 
+    "1.0452** (1.0113, 1.0803)", "0.9239*** (0.8804, 0.9696)", "1.0212* (1.0016, 1.0413)", 
+    "1.0029*** (1.0018, 1.0040)", "-", "1.0191* (1.0020, 1.0365)", 
+    "0.9887*** (0.9844, 0.9931)", "0.9827*** (0.9771, 0.9883)", "1.0231*** (1.0212, 1.0250)", 
+    "1.1651*** (1.0958, 1.2387)", "138296", "138401"
+  ),
+  Model3 = c(
+    "0.9690 (0.9218, 1.0186)", "0.9690*** (0.9218, 1.0186)", "1.0556* (1.0003, 1.1140)", 
+    "1.0448** (1.0109, 1.0798)", "0.9247*** (0.8811, 0.9704)", "1.0211* (1.0015, 1.0411)", 
+    "1.0028*** (1.0017, 1.0039)", "0.9792 (0.9512, 1.0081)", "1.0189* (1.0016, 1.0364)", 
+    "0.9887*** (0.9843, 0.9931)", "0.9885* (0.9788, 0.9984)", "1.0230*** (1.0212, 1.0249)", 
+    "1.1623*** (1.0932, 1.2358)", "138295", "138414"
+  )
+)
+
+# 创建表格
+kable(model_comparison, align = "lccc", booktabs = TRUE, caption = "Comparison of Three Cox Models (95% CI)") %>%
+  kable_styling(full_width = FALSE, position = "center") %>%
+  footnote(
+    general = c(
+      "*** p < 0.001 (Highly significant)",
+      "** p < 0.01 (Moderately significant)",
+      "* p < 0.05 (Significant at 5% level)",
+      "(95% CI) refers to the 95% Confidence Interval, representing the range of plausible values for the parameter estimate."
+    ),
+    general_title = "Notes:",
+    footnote_as_chunk = TRUE
+  )
+
+
+```
+
+
+**Analysis:**
+
+- **Model Comparison:**  
+  - **Model1** serves as a baseline, including only `is_weekend_admission`. It has the highest AIC and BIC, indicating a poorer fit compared to other models.
+  - **Model2** incorporates additional clinical and demographic factors, significantly improving model fit and providing a more comprehensive explanation of survival outcomes.
+  - **Model3** retains only significant variables from Model2, reducing complexity while maintaining explanatory power. It has the lowest AIC, suggesting the best fit.
+
+- **Significant Predictors:**
+  - Variables such as `positiveculture`, `gcs`, `gcsmotor`, and `bloodureanitrogen` were significant across both Model2 and Model3.
+  - The influence of `is_weekend_admission` was non-significant after including additional covariates, suggesting its limited independent effect on survival outcomes.
+
+- **Model Fit Metrics (AIC and BIC):**
+  - **AIC** and **BIC** are used to assess model goodness of fit. Lower values indicate a better fit. **Model3** has the lowest AIC, while **Model2** balances fit and model complexity, making both viable depending on the use case.
+
+Overall, Model3 strikes a balance between explanatory power and simplicity, making it the preferred model for interpretation and clinical decision-making. The findings emphasize the importance of including key clinical predictors to improve survival outcome predictions.
+
+
+
+### Model Interpretation: Reduced Model (Model2)
+
+The **Reduced Model (Model2)** was selected for its balance between model complexity and predictive power. The key aspects of this model, supported by statistical evidence, are outlined below:
+
+- **Key Predictors**:
+  - **Positiveculture**: The hazard ratio (HR) of 1.0583 (95% CI: 1.0029–1.1168, p = 0.03882) suggests that patients with positive culture results have a slightly higher risk of mortality, indicating the impact of infection on survival.
+  - **GCS (Glasgow Coma Scale)**: An HR of 1.0452 (95% CI: 1.0113–1.0803, p = 0.00853) demonstrates that better neurological function is associated with improved survival outcomes.
+  - **Gcsmotor**: With an HR of 0.9239 (95% CI: 0.8804–0.9696, p = 0.00131), a lower motor response score correlates with increased risk, highlighting the importance of motor function in predicting survival.
+  - **Lactate**: The HR of 1.0212 (95% CI: 1.0016–1.0413, p = 0.03393) indicates that higher lactate levels are linked to increased mortality risk, emphasizing the significance of metabolic status.
+  - **Age**: The HR of 1.0231 (95% CI: 1.0212–1.0250, p < 0.001) shows that older age is significantly associated with increased risk of mortality, reinforcing the importance of age as a predictor.
+  - **Insurance (Medicare)**: Patients with Medicare had an HR of 1.1651 (95% CI: 1.0958–1.2387, p < 0.001), suggesting that Medicare patients may have a higher risk, potentially due to comorbidities or differences in care access.
+
+- **Weekend Admission**:
+  - The variable **is_weekend_admission** was not statistically significant (HR = 0.9691, 95% CI: 0.9219–1.0188, p = 0.21860) after adjustment, implying that the initial effect of weekend admission on survival may be explained by other factors.
+
+- **Model Fit**:
+  - The reduced model demonstrated strong fit statistics, as indicated by a likelihood ratio test (LRT) and other criteria like AIC and BIC, which improved compared to the unadjusted model. This suggests that including relevant patient-specific variables provides a more accurate prediction of survival outcomes.
+
+- **Clinical Implications**:
+  - Clinical and demographic variables such as **neurological status (GCS)**, **infection markers (positiveculture)**, **age**, and **insurance type** are critical in predicting ICU survival outcomes.
+  - The findings imply that more comprehensive care focusing on infection control, neurological assessment, and addressing patient demographics may improve ICU patient outcomes.
+
+Overall, **Model2** provides a well-balanced approach, retaining significant variables that are both clinically relevant and statistically impactful, while reducing the risk of overfitting by excluding non-significant predictors.
+
+```{r}
+# Check the proportionality assumption
+test_proportionality <- cox.zph(reduced_model)
+print(test_proportionality)
+
+```
+
+
+### Proportionality Assumption Test
+
+- **Objective**: The proportionality test checks whether the proportional hazards (PH) assumption holds for the reduced Cox model. This assumption is critical for the validity of Cox regression results.
+
+- **Findings**:
+  - Variables such as **gcs**, **gcsmotor**, **lactate**, **gcsverbal**, **admission_location_TRANSFER.FROM.HOSP.EXTRAM**, and **is_weekend_admission** violate the PH assumption (p < 0.05).
+  - The **GLOBAL** test also indicates a significant deviation from the PH assumption for the model as a whole (p < 2e-16).
+
+- **Implications**: Since some variables do not satisfy the PH assumption, the model's validity may be compromised. Considerations such as stratified analysis or the use of time-dependent Cox models could be beneficial for improving model accuracy.
+
+
+
