@@ -18,6 +18,8 @@ This project aims to contribute to the understanding of critical care patient ou
 - Identifying key predictors of ICU mortality within the first 24 hours of admission.
 - Highlighting disparities in patient outcomes related to admission timing, potentially informing hospital staffing and resource planning.
 
+**Note:** This project is documented in my report *"Capstone_Project_Liyang_Li.pdf"*, which provides detailed analysis and results.
+
 ## File Structure
 The repository is organized into two main directories corresponding to the research questions:
 
