@@ -1,13 +1,13 @@
 # Capstone Project
 
 ## Project Description
-This project focuses on leveraging healthcare data to predict long-term ICU mortality and analyze the "weekend effect," which examines whether patient outcomes differ based on the day of admission. Using early admission data from the MIMIC-III database, this project employs advanced machine learning models, including Random Forest, XGBoost, and survival analysis techniques, to extract actionable insights for improving patient care and resource allocation.
+This repository contains data and code for predicting long-term ICU mortality and analyzing the weekend effect using early admission data. The project leverages machine learning and statistical modeling to address two key research objectives:
 
-The analysis is divided into two main objectives:
+### Objectives
 1. **Mortality Prediction:** Developing models to predict ICU mortality using the first 24 hours of patient data. This includes preprocessing, feature engineering, and hyperparameter tuning for optimal performance.
 2. **Weekend Effect Analysis:** Examining whether patients admitted over weekends have higher mortality rates compared to weekdays, utilizing statistical and machine learning approaches to identify potential patterns.
 
-## Features
+### Features
 - **Comprehensive Data Analysis:** Includes data cleaning, preprocessing, and exploratory data analysis (EDA) for insightful visualizations.
 - **Machine Learning Models:** Employs Random Forest, XGBoost, and logistic regression models for predicting mortality.
 - **Survival Analysis:** Utilizes survival models such as Cox Proportional-Hazards to study time-to-event data and evaluate the weekend effect.
@@ -18,7 +18,32 @@ This project aims to contribute to the understanding of critical care patient ou
 - Identifying key predictors of ICU mortality within the first 24 hours of admission.
 - Highlighting disparities in patient outcomes related to admission timing, potentially informing hospital staffing and resource planning.
 
-## Files
+## File Structure
+The repository is organized into two main directories corresponding to the research questions:
+
+### **Research Question 1**
+This folder contains Jupyter notebooks for data preprocessing, feature engineering, and training machine learning models:
+- `1.Filter_and_Merge.ipynb` - Data filtering and merging of relevant datasets.
+- `2.nan_data_cleaning.ipynb` - Cleaning missing values in the dataset.
+- `3.NaN_Checker.ipynb` - Identifying and handling missing values.
+- `4.data_preprocessing_pipeline.ipynb` - Comprehensive preprocessing pipeline.
+- `5.Logistic_Regression.ipynb` - Logistic Regression model for ICU mortality prediction.
+- `6.Random_Forest.ipynb` - Random Forest model for ICU mortality prediction.
+- `7.XGBOOST.ipynb` - XGBoost model for ICU mortality prediction.
+- `8.Graph.ipynb` - Visualizations and graphs of model performance.
+
+### **Research Question 2**
+This folder focuses on statistical analysis and survival modeling:
+- `1.Filter_and_Merge.ipynb` - Initial filtering and merging of relevant datasets.
+- `2.statistical_analysis.ipynb` - Statistical exploration of the weekend effect.
+- `3.nan_data_cleaning.ipynb` - Handling missing values.
+- `4.NaN_filling.ipynb` - Filling missing data with imputation techniques.
+- `5.Try_reduced_model.ipynb` - Building a simplified model for survival analysis.
+- `Survival Models.Rmd` - R Markdown file detailing survival modeling processes.
+- `Survival Models.html` - Rendered HTML version of the survival analysis.
+- `cleaned_final_cox_dataset.csv` - Preprocessed dataset for Cox Proportional-Hazards modeling.
+
+## Dataset
 Although the actual data files are not uploaded due to privacy and size constraints, the following files were used in this project:
 
 1. **admissions.csv** - Contains information about patient admissions (11 MB).  
@@ -37,7 +62,6 @@ Although the actual data files are not uploaded due to privacy and size constrai
 14. **transfers.csv** - Documents patient transfers within the ICU (22.8 MB).  
 15. **vasopressors.csv** - Records vasopressor medication data (16.8 MB).  
 16. **vitals_hourly.csv** - Provides hourly vital sign measurements (258 MB).  
-
 
 ## How to Use
 1. Clone the repository using the following command:
